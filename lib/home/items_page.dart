@@ -80,12 +80,6 @@ class _ItemsPageState extends State<ItemsPage> {
           'Users',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            onPressed: () => _openAddItemSheet(context),
-          ),
-        ],
       ),
 
       body: Column(
@@ -161,40 +155,6 @@ class _ItemsPageState extends State<ItemsPage> {
           ),
         ],
       ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openAddItemSheet(context),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  void _openAddItemSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF121212),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            top: 16,
-            left: 16,
-            right: 16,
-          ),
-          child: AddItemForm(
-            onSubmit: (item) {
-              setState(() {
-                _items.add(item);
-              });
-              Navigator.pop(ctx);
-            },
-          ),
-        );
-      },
     );
   }
 }
