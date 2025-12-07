@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:spot_it/screens/intro_screen.dart';
-import 'package:spot_it/screens/login_page.dart';
+import 'package:spot_it/screens/auth/login_page.dart';
 import 'package:spot_it/home/action_choice_page.dart';
 
 void main() {
