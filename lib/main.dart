@@ -1,37 +1,43 @@
 import 'package:flutter/material.dart';
-import 'home/items_page.dart';
-import 'screens/intro_screen.dart';   // <-- ADD THIS IMPORT
-import 'screens/login_page.dart';    // <-- ADD THIS IMPORT (create login_page.dart)
+import 'package:spot_it/screens/intro_screen.dart';
+import 'package:spot_it/screens/login_page.dart';
+import 'package:spot_it/home/action_choice_page.dart';
 
 void main() {
-  runApp(const LostAndFoundApp());
+  runApp(const SpotItApp());
 }
 
-class LostAndFoundApp extends StatelessWidget {
-  const LostAndFoundApp({super.key});
+class SpotItApp extends StatelessWidget {
+  const SpotItApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Campus Lost & Found',
+      title: 'SpotIt - Campus Lost & Found',
       debugShowCheckedModeBanner: false,
-
-      // DARK THEME (your original)
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF000000),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
         ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1A1A1A),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
 
-      // START THE APP WITH INTRO SCREEN
-      initialRoute: '/',
-
+      // 👇 we are using named routes now
+      initialRoute: '/intro',
       routes: {
-        '/': (context) => const IntroScreen(),   // <-- Lottie intro screen
-        '/login': (context) => const LoginPage(), // <-- Login screen
-        '/home': (context) => ItemsPage(),       // <-- Your existing home
+        '/intro': (context) => const IntroScreen(),
+        '/login': (context) => const LoginPage(),
+
+        // you can also add '/items': (context) => const ItemsPage(), etc.
       },
     );
   }

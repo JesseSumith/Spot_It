@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../screens/profile_page.dart';
 import '../screens/settings_page.dart';
 import '../screens/about_page.dart';
 
 class AppDrawer extends StatelessWidget {
-  final String currentPage;
+  final String currentPage; // "home", "profile", "settings", "about"
 
   const AppDrawer({super.key, this.currentPage = "home"});
 
@@ -17,37 +18,52 @@ class AppDrawer extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile header
+              // 👇 TOP PROFILE SECTION – NOW CLICKABLE
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const CircleAvatar(radius: 22, child: Text('A')),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'A',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(context); // close drawer
+                    if (currentPage != "profile") {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfilePage()),
+                      );
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      const CircleAvatar(radius: 22, child: Text('A')),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'A',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'sumithjesse@gmail.com',
-                          style: TextStyle(fontSize: 12, color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ],
+                          SizedBox(height: 4),
+                          Text(
+                            'sumithjesse@gmail.com',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
               const Divider(color: Colors.white24, height: 1),
 
-              // Drawer item helper
+              // MENU ITEMS
               _drawerItem(
                 context,
                 label: "Home",
@@ -63,10 +79,12 @@ class AppDrawer extends StatelessWidget {
                 selected: currentPage == "profile",
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfilePage()),
-                  );
+                  if (currentPage != "profile") {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfilePage()),
+                    );
+                  }
                 },
               ),
 
@@ -98,30 +116,7 @@ class AppDrawer extends StatelessWidget {
                 },
               ),
 
-              const Spacer(),
-
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: const Text(
-                      'Made with Flutter',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              // 👇 removed Spacer + "Made with Flutter"
             ],
           ),
         ),

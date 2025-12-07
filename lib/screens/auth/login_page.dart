@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:animations/animations.dart';
 import 'package:spot_it/home/action_choice_page.dart';
+import 'package:spot_it/utils/page_transitions.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,24 +25,27 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _login() async {
+  void _login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    // TODO: replace this with real backend call later
+    // TODO: replace this with real backend call
     await Future.delayed(const Duration(seconds: 1));
 
     setState(() => _isLoading = false);
 
-    // ➜ All users go to ActionChoicePage
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ActionChoicePage()),
+    // All users → ActionChoicePage with Shared Axis transition
+    Navigator.of(context).pushReplacement(
+      sharedAxisRoute(
+        const ActionChoicePage(),
+        type: SharedAxisTransitionType.vertical,
+      ),
     );
   }
 
   void _goToRegister() {
+    // For now, just show a snackbar. Later you can create a RegisterPage.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Registration screen coming soon")),
     );

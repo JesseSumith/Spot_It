@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  animations: ^2.1.1 
 
   # Lottie for intro animation
   lottie: ^2.7.0
