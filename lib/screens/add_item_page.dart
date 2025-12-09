@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 
 import '../models/lost_item.dart';
+import '../service/lost_item_service.dart';
 
 class AddItemPage extends StatefulWidget {
   final void Function(LostItem) onSubmit;
@@ -30,6 +31,9 @@ class _AddItemPageState extends State<AddItemPage> {
   final ImagePicker _picker = ImagePicker();
 
   String? _selectedType; // "lost" or "found"
+  bool _isSubmitting = false;
+
+  final LostItemService _service = LostItemService();
 
   @override
   void dispose() {
@@ -164,7 +168,7 @@ class _AddItemPageState extends State<AddItemPage> {
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
-                        // nice subtle Lottie hint above buttons when no image
+                        // Lottie hint above buttons when no image
                         if (_photoPath == null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8.0),
@@ -174,7 +178,6 @@ class _AddItemPageState extends State<AddItemPage> {
                                 opacity: 0.9,
                                 child: Lottie.asset(
                                   'assets/animations/camera.json',
-                                  // replace with your own animation
                                   repeat: true,
                                   fit: BoxFit.contain,
                                 ),
@@ -252,15 +255,25 @@ class _AddItemPageState extends State<AddItemPage> {
                   children: [
                     Expanded(
                       child: TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => Navigator.pop(context),
                         child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _submit,
-                        child: const Text('Submit'),
+                        onPressed: _isSubmitting ? null : _submit,
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Submit'),
                       ),
                     ),
                   ],
@@ -301,9 +314,7 @@ class _AddItemPageState extends State<AddItemPage> {
   }
 
   /// Big aesthetic Lost / Found buttons with Lottie animations.
-  ///
-  /// These **set `_selectedType` to exactly "lost" or "found"**
-  /// which is what goes to the backend via `LostItem.type`.
+  /// Sets `_selectedType` to exactly "lost" or "found"
   Widget _buildTypeSelector() {
     final lostSelected = _selectedType == 'lost';
     final foundSelected = _selectedType == 'found';
@@ -350,11 +361,10 @@ class _AddItemPageState extends State<AddItemPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // LOST LOTTIE
                       SizedBox(
                         height: 70,
                         child: Lottie.asset(
-                          'assets/animations/lost.json', // your "lost" animation
+                          'assets/animations/lost.json',
                           repeat: true,
                           fit: BoxFit.contain,
                         ),
@@ -419,11 +429,10 @@ class _AddItemPageState extends State<AddItemPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // FOUND LOTTIE
                       SizedBox(
                         height: 70,
                         child: Lottie.asset(
-                          'assets/animations/found.json', // your "found" animation
+                          'assets/animations/found.json',
                           repeat: true,
                           fit: BoxFit.contain,
                         ),
@@ -475,7 +484,7 @@ class _AddItemPageState extends State<AddItemPage> {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.photo_library),
                 label: const Text('Gallery'),
-                onPressed: _pickFromGallery,
+                onPressed: _isSubmitting ? null : _pickFromGallery,
               ),
             ),
             const SizedBox(width: 8),
@@ -483,7 +492,7 @@ class _AddItemPageState extends State<AddItemPage> {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('Camera'),
-                onPressed: _pickFromCamera,
+                onPressed: _isSubmitting ? null : _pickFromCamera,
               ),
             ),
           ],
@@ -551,26 +560,31 @@ class _AddItemPageState extends State<AddItemPage> {
     }
   }
 
-  void _submit() {
-    // first validate all text fields + date
+  Future<void> _submit() async {
+    // avoid double taps
+    if (_isSubmitting) return;
+
+    // validate all form fields
     if (!_formKey.currentState!.validate()) return;
 
-    // then enforce type selection
+    // enforce lost / found selection
     if (_selectedType == null) {
-      setState(() {}); // to show red error text under type
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select Lost or Found')),
       );
       return;
     }
 
-    final id = DateTime.now().millisecondsSinceEpoch;
+    setState(() => _isSubmitting = true);
+
+    final tempId = DateTime.now().millisecondsSinceEpoch;
 
     final item = LostItem(
-      id: id,
+      id: tempId,
       email: _emailController.text.trim(),
-      photoUrl: _photoPath ?? 'https://via.placeholder.com/150',
-      type: _selectedType!, // "lost" or "found" -> goes to backend
+      photoUrl: _photoPath ?? '',
+      type: _selectedType!, // "lost" or "found"
       itemName: _itemNameController.text.trim(),
       location: _locationController.text.trim(),
       date: _selectedDate ?? DateTime.now(),
@@ -579,7 +593,33 @@ class _AddItemPageState extends State<AddItemPage> {
       contactMethod: _contactMethodController.text.trim(),
     );
 
-    widget.onSubmit(item);
-    Navigator.pop(context); // close the page after submit
+    try {
+      final hasImage = _photoPath != null && _photoPath!.isNotEmpty;
+      print('🚀 SUBMIT: hasImage=$hasImage, path=$_photoPath');
+
+      LostItem created;
+      if (hasImage) {
+        // multipart with file
+        created = await _service.createItemWithImage(item, _photoPath!);
+      } else {
+        // plain JSON (no file)
+        created = await _service.createItem(item);
+      }
+
+      print('✅ SUBMIT success, id=${created.id}, image=${created.photoUrl}');
+
+      if (!mounted) return;
+      widget.onSubmit(created);
+      Navigator.pop(context);
+    } catch (e, st) {
+      // log full error to console, show friendly message in UI
+      print('❌ SUBMIT error: $e');
+      print(st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to submit. Please try again.')),
+      );
+      setState(() => _isSubmitting = false);
+    }
   }
 }

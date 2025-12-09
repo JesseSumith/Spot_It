@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../models/lost_item.dart';
-import '../../widgets/app_drawer.dart';
-import '../../widgets/add_item_form.dart';
-import '../detail/item_detail_page.dart';
+import '../models/lost_item.dart';
+import '../service/lost_item_service.dart';
+import '../widgets/app_drawer.dart';
+import '../detail/item_detail_page.dart'; // if you still use this
 
 class ItemsPage extends StatefulWidget {
   const ItemsPage({super.key});
@@ -14,60 +14,25 @@ class ItemsPage extends StatefulWidget {
 
 class _ItemsPageState extends State<ItemsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final LostItemService _service = LostItemService();
 
-  final List<LostItem> _items = [
-    LostItem(
-      id: '1',
-      email: 'finder@college.edu',
-      photoUrl:
-          'https://images.pexels.com/photos/59886/pexels-photo-59886.jpeg?auto=compress&cs=tinysrgb&w=800',
-      type: 'found',
-      itemName: 'black wallet',
-      location: 'library second floor',
-      date: DateTime(2025, 11, 29),
-      details: 'Has student ID inside',
-      contactName: 'Jesse',
-      contactMethod: 'WhatsApp: 7702xxxxxx',
-    ),
-    LostItem(
-      id: '2',
-      email: 'owner@college.edu',
-      photoUrl:
-          'https://images.pexels.com/photos/130879/pexels-photo-130879.jpeg?auto=compress&cs=tinysrgb&w=800',
-      type: 'Lost',
-      itemName: 'Car keys',
-      location: 'Parking lot',
-      date: DateTime(2025, 11, 28),
-      details: 'Hyundai key + keychain',
-      contactName: 'Sam',
-      contactMethod: 'Call: 98xxxxxxx',
-    ),
-    LostItem(
-      id: '3',
-      email: 'bracelet@college.edu',
-      photoUrl:
-          'https://images.pexels.com/photos/1035673/pexels-photo-1035673.jpeg?auto=compress&cs=tinysrgb&w=800',
-      type: 'Lost',
-      itemName: 'Bracelet',
-      location: 'Cafeteria',
-      date: DateTime(2025, 11, 27),
-      details: 'Brown leather bracelet',
-      contactName: 'Alex',
-      contactMethod: 'Insta: @alex',
-    ),
-  ];
-
+  late Future<List<LostItem>> _itemsFuture;
   String _searchQuery = '';
 
   @override
-  Widget build(BuildContext context) {
-    final filteredItems = _items.where((item) {
-      final q = _searchQuery.toLowerCase();
-      return item.itemName.toLowerCase().contains(q) ||
-          item.location.toLowerCase().contains(q) ||
-          item.type.toLowerCase().contains(q);
-    }).toList();
+  void initState() {
+    super.initState();
+    _itemsFuture = _service.fetchItems();
+  }
 
+  void _refresh() {
+    setState(() {
+      _itemsFuture = _service.fetchItems();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       drawer: const AppDrawer(currentPage: "home"),
@@ -77,11 +42,13 @@ class _ItemsPageState extends State<ItemsPage> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         title: const Text(
-          'Users',
+          'Items',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
+        ],
       ),
-
       body: Column(
         children: [
           const SizedBox(height: 8),
@@ -93,7 +60,7 @@ class _ItemsPageState extends State<ItemsPage> {
               },
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: 'Search',
+                hintText: 'Search by title or location',
                 filled: true,
                 fillColor: const Color(0xFF2A2A2A),
                 border: OutlineInputBorder(
@@ -104,50 +71,84 @@ class _ItemsPageState extends State<ItemsPage> {
             ),
           ),
           const SizedBox(height: 8),
+
           Expanded(
-            child: ListView.separated(
-              itemCount: filteredItems.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1, indent: 72, color: Colors.white10),
-              itemBuilder: (context, index) {
-                final item = filteredItems[index];
-                return ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Image.network(item.photoUrl, fit: BoxFit.cover),
+            child: FutureBuilder<List<LostItem>>(
+              future: _itemsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error: ${snapshot.error}',
+                      textAlign: TextAlign.center,
                     ),
+                  );
+                }
+
+                final items = snapshot.data ?? [];
+
+                // 🔍 Apply search on itemName & location
+                final filtered = items.where((item) {
+                  final q = _searchQuery.toLowerCase();
+                  return item.itemName.toLowerCase().contains(q) ||
+                      item.location.toLowerCase().contains(q);
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return const Center(child: Text('No items found'));
+                }
+
+                return ListView.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    indent: 72,
+                    color: Colors.white10,
                   ),
-                  title: Text(
-                    item.itemName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    item.type,
-                    style: TextStyle(
-                      color: item.type.toLowerCase() == 'found'
-                          ? Colors.greenAccent
-                          : Colors.redAccent,
-                    ),
-                  ),
-                  trailing: const Icon(Icons.more_vert),
-                  onTap: () async {
-                    final updated = await Navigator.push<LostItem?>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ItemDetailPage(item: item),
+                  itemBuilder: (context, index) {
+                    final item = filtered[index];
+
+                    return ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Image.network(
+                            item.photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.image_not_supported),
+                          ),
+                        ),
                       ),
-                    );
-                    if (updated != null) {
-                      setState(() {
-                        final i = _items.indexWhere(
-                          (element) => element.id == item.id,
+                      title: Text(
+                        item.itemName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        '${item.type} • ${item.location}',
+                        style: TextStyle(
+                          color: item.type.toLowerCase() == 'lost'
+                              ? Colors.redAccent
+                              : Colors.greenAccent,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        // If you still use a detail page:
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ItemDetailPage(item: item),
+                          ),
                         );
-                        if (i != -1) _items[i] = updated;
-                      });
-                    }
+                      },
+                    );
                   },
                 );
               },

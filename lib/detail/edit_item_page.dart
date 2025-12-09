@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/lost_item.dart';
+import '../service/lost_item_service.dart';
 
 class EditItemPage extends StatefulWidget {
   final LostItem item;
@@ -13,31 +14,36 @@ class EditItemPage extends StatefulWidget {
 
 class _EditItemPageState extends State<EditItemPage> {
   final _formKey = GlobalKey<FormState>();
+  final LostItemService _service = LostItemService();
 
-  late TextEditingController _typeController;
   late TextEditingController _itemNameController;
   late TextEditingController _locationController;
   late TextEditingController _detailsController;
   late TextEditingController _contactNameController;
   late TextEditingController _contactMethodController;
-  DateTime? _date;
+  String _type = 'Lost'; // dropdown value
+  DateTime? _selectedDate;
+
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    final item = widget.item;
-    _typeController = TextEditingController(text: item.type);
-    _itemNameController = TextEditingController(text: item.itemName);
-    _locationController = TextEditingController(text: item.location);
-    _detailsController = TextEditingController(text: item.details);
-    _contactNameController = TextEditingController(text: item.contactName);
-    _contactMethodController = TextEditingController(text: item.contactMethod);
-    _date = item.date;
+    _itemNameController = TextEditingController(text: widget.item.itemName);
+    _locationController = TextEditingController(text: widget.item.location);
+    _detailsController = TextEditingController(text: widget.item.details);
+    _contactNameController = TextEditingController(
+      text: widget.item.contactName,
+    );
+    _contactMethodController = TextEditingController(
+      text: widget.item.contactMethod,
+    );
+    _type = widget.item.type; // "Lost" or "Found"
+    _selectedDate = widget.item.date;
   }
 
   @override
   void dispose() {
-    _typeController.dispose();
     _itemNameController.dispose();
     _locationController.dispose();
     _detailsController.dispose();
@@ -46,102 +52,206 @@ class _EditItemPageState extends State<EditItemPage> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Edit item')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              _buildField('Type', _typeController),
-              _buildField('Item name', _itemNameController),
-              _buildField('Location', _locationController),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _pickDate,
-                child: AbsorbPointer(
-                  child: TextFormField(
-                    controller: TextEditingController(
-                      text: _date == null
-                          ? ''
-                          : '${_date!.day.toString().padLeft(2, '0')}-'
-                                '${_date!.month.toString().padLeft(2, '0')}-'
-                                '${_date!.year}',
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Date',
-                      prefixIcon: Icon(Icons.calendar_today),
-                    ),
-                    validator: (_) =>
-                        _date == null ? 'Please select date' : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _buildField('Details', _detailsController, maxLines: 2),
-              _buildField('Contact name', _contactNameController),
-              _buildField('Contact method', _contactMethodController),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _save, child: const Text('Save')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildField(
-    String label,
-    TextEditingController controller, {
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        decoration: InputDecoration(labelText: label),
-        validator: (value) =>
-            value == null || value.trim().isEmpty ? 'Required' : null,
-      ),
-    );
-  }
-
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final initial = _selectedDate ?? now;
     final picked = await showDatePicker(
       context: context,
+      initialDate: initial,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 1),
-      initialDate: _date ?? now,
-      builder: (context, child) {
-        return Theme(data: ThemeData.dark(useMaterial3: true), child: child!);
-      },
     );
     if (picked != null) {
-      setState(() => _date = picked);
+      setState(() => _selectedDate = picked);
     }
   }
 
-  void _save() {
+  Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSaving) return;
 
     final updated = LostItem(
       id: widget.item.id,
       email: widget.item.email,
       photoUrl: widget.item.photoUrl,
-      type: _typeController.text.trim(),
+      type: _type,
       itemName: _itemNameController.text.trim(),
       location: _locationController.text.trim(),
-      date: _date ?? DateTime.now(),
+      date: _selectedDate ?? DateTime.now(),
       details: _detailsController.text.trim(),
       contactName: _contactNameController.text.trim(),
       contactMethod: _contactMethodController.text.trim(),
     );
 
-    Navigator.pop(context, updated);
+    setState(() => _isSaving = true);
+
+    try {
+      final saved = await _service.updateItem(updated);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Item updated')));
+
+      Navigator.pop(context, saved);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit item'),
+        actions: [
+          IconButton(
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+            onPressed: _isSaving ? null : _saveChanges,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // Type (Lost / Found)
+              DropdownButtonFormField<String>(
+                value: _type,
+                items: const [
+                  DropdownMenuItem(value: 'Lost', child: Text('Lost')),
+                  DropdownMenuItem(value: 'Found', child: Text('Found')),
+                ],
+                decoration: const InputDecoration(labelText: 'Type'),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _type = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Item name
+              TextFormField(
+                controller: _itemNameController,
+                decoration: const InputDecoration(labelText: 'Item name'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter item name';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Location
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Location'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter location';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Date
+              InkWell(
+                onTap: _pickDate,
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Date'),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _selectedDate != null
+                            ? _selectedDate!.toLocal().toString().substring(
+                                0,
+                                10,
+                              )
+                            : 'Select date',
+                      ),
+                      const Icon(Icons.calendar_today, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Details
+              TextFormField(
+                controller: _detailsController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Details'),
+              ),
+              const SizedBox(height: 16),
+
+              // Contact name
+              TextFormField(
+                controller: _contactNameController,
+                decoration: const InputDecoration(labelText: 'Contact name'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter contact name';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Contact method
+              TextFormField(
+                controller: _contactMethodController,
+                decoration: const InputDecoration(
+                  labelText: 'Contact method (phone, WhatsApp, etc.)',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter contact method';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Save button (in case user misses app bar icon)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveChanges,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save changes'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
