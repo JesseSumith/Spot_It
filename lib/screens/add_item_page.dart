@@ -9,276 +9,84 @@ import '../service/lost_item_service.dart';
 
 class AddItemPage extends StatefulWidget {
   final void Function(LostItem) onSubmit;
-
   const AddItemPage({super.key, required this.onSubmit});
 
   @override
   State<AddItemPage> createState() => _AddItemPageState();
 }
 
-class _AddItemPageState extends State<AddItemPage> {
+class _AddItemPageState extends State<AddItemPage> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
 
+  // Controllers
   final _emailController = TextEditingController();
   final _itemNameController = TextEditingController();
   final _locationController = TextEditingController();
   final _detailsController = TextEditingController();
   final _contactNameController = TextEditingController();
   final _contactMethodController = TextEditingController();
+  final _dateController = TextEditingController();
 
   DateTime? _selectedDate;
-  String? _photoPath; // local path from gallery/camera
-  final ImagePicker _picker = ImagePicker();
-
-  String? _selectedType; // "lost" or "found"
+  String? _photoPath;
+  String? _selectedType;
   bool _isSubmitting = false;
 
+  final ImagePicker _picker = ImagePicker();
   final LostItemService _service = LostItemService();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _retrieveLostData();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _emailController.dispose();
     _itemNameController.dispose();
     _locationController.dispose();
     _detailsController.dispose();
     _contactNameController.dispose();
     _contactMethodController.dispose();
+    _dateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _retrieveLostData() async {
+    final response = await _picker.retrieveLostData();
+    if (response.isEmpty) return;
+    if (response.file != null) {
+      setState(() => _photoPath = response.file!.path);
+      print(
+        '♻️ RETRIEVE_LOST_DATA: restored photoPath = $_photoPath, exists? ${File(_photoPath!).existsSync()}',
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Add item'), centerTitle: true),
+      appBar: AppBar(title: const Text("Add Item"), centerTitle: true),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: bottomInset + 24,
-          ),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 24),
           child: Form(
             key: _formKey,
             child: Column(
               children: [
-                // Header text
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Report a lost / found item',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Choose whether the item is lost or found, then fill in the details.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                  ),
-                ),
+                _buildTypeSelector(),
                 const SizedBox(height: 16),
-
-                // TYPE + LOTTIE CARD (big buttons Lost / Found)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'What are you reporting?',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTypeSelector(),
-                      ],
-                    ),
-                  ),
-                ),
-
+                _buildDetailsCard(),
                 const SizedBox(height: 16),
-
-                // ITEM DETAILS CARD
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Item details',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTextField('Item name', _itemNameController),
-                        _buildTextField('Location', _locationController),
-                        _buildTextField(
-                          'Details (color, brand, etc.)',
-                          _detailsController,
-                          maxLines: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
+                _buildPhotoCard(),
                 const SizedBox(height: 16),
-
-                // PHOTO CARD
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Photo (optional)',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        // Lottie hint above buttons when no image
-                        if (_photoPath == null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: SizedBox(
-                              height: 90,
-                              child: Opacity(
-                                opacity: 0.9,
-                                child: Lottie.asset(
-                                  'assets/animations/camera.json',
-                                  repeat: true,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                          ),
-                        _buildPhotoPicker(context),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // DATE + CONTACT CARD
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'When & contact',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTextField('Email', _emailController),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: _pickDate,
-                          child: AbsorbPointer(
-                            child: TextFormField(
-                              decoration: const InputDecoration(
-                                labelText: 'Date',
-                                prefixIcon: Icon(Icons.calendar_today),
-                                hintText: 'dd-mm-yyyy',
-                                filled: true,
-                              ),
-                              validator: (_) => _selectedDate == null
-                                  ? 'Please select a date'
-                                  : null,
-                              controller: TextEditingController(
-                                text: _selectedDate == null
-                                    ? ''
-                                    : '${_selectedDate!.day.toString().padLeft(2, '0')}-'
-                                          '${_selectedDate!.month.toString().padLeft(2, '0')}-'
-                                          '${_selectedDate!.year}',
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildTextField('Contact name', _contactNameController),
-                        _buildTextField(
-                          'Contact method (phone / email)',
-                          _contactMethodController,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
+                _buildContactCard(),
                 const SizedBox(height: 24),
-
-                // BUTTONS
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submit,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Submit'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                _buildSubmitButtons(),
               ],
             ),
           ),
@@ -287,339 +95,284 @@ class _AddItemPageState extends State<AddItemPage> {
     );
   }
 
-  // ---------- WIDGET HELPERS ----------
-
   Widget _buildTextField(
     String label,
     TextEditingController controller, {
     int maxLines = 1,
-    String? Function(String?)? validator,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: 8),
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
         decoration: InputDecoration(labelText: label, filled: true),
-        validator:
-            validator ??
-            (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Required';
-              }
-              return null;
-            },
+        validator: (v) => v == null || v.trim().isEmpty ? "Required" : null,
       ),
     );
   }
 
-  /// Big aesthetic Lost / Found buttons with Lottie animations.
-  /// Sets `_selectedType` to exactly "lost" or "found"
   Widget _buildTypeSelector() {
-    final lostSelected = _selectedType == 'lost';
-    final foundSelected = _selectedType == 'found';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
-            // LOST BUTTON
-            Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  setState(() => _selectedType = 'lost');
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: lostSelected
-                        ? const LinearGradient(
-                            colors: [Color(0xFFFF5B5B), Color(0xFFFF8E8E)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : LinearGradient(
-                            colors: [
-                              Colors.grey.shade900,
-                              Colors.grey.shade800,
-                            ],
-                          ),
-                    border: Border.all(
-                      color: lostSelected
-                          ? Colors.redAccent
-                          : Colors.grey.shade700,
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        height: 70,
-                        child: Lottie.asset(
-                          'assets/animations/lost.json',
-                          repeat: true,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Lost',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: lostSelected ? Colors.white : Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'You lost something',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: lostSelected ? Colors.white70 : Colors.white54,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            const Text(
+              "What are you reporting?",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _typeOption("Lost")),
+                const SizedBox(width: 12),
+                Expanded(child: _typeOption("Found")),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeOption(String type) {
+    final selected = _selectedType == type.toLowerCase();
+    final color = type == "Lost" ? Colors.redAccent : Colors.greenAccent;
+
+    return InkWell(
+      onTap: () {
+        setState(() => _selectedType = type.toLowerCase());
+        print('🔵 TYPE SELECTED: $_selectedType');
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: selected ? color : Colors.grey),
+          borderRadius: BorderRadius.circular(12),
+          color: selected ? color.withOpacity(0.2) : null,
+        ),
+        child: Column(
+          children: [
+            Icon(
+              type == "Lost" ? Icons.search_off : Icons.check_circle_outline,
+              size: 40,
+              color: selected ? color : Colors.grey,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              type,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: selected ? color : Colors.grey,
               ),
             ),
-            const SizedBox(width: 12),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // FOUND BUTTON
-            Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  setState(() => _selectedType = 'found');
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: foundSelected
-                        ? const LinearGradient(
-                            colors: [Color(0xFF00C853), Color(0xFF69F0AE)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : LinearGradient(
-                            colors: [
-                              Colors.grey.shade900,
-                              Colors.grey.shade800,
-                            ],
-                          ),
-                    border: Border.all(
-                      color: foundSelected
-                          ? Colors.greenAccent
-                          : Colors.grey.shade700,
-                      width: 1.2,
+  Widget _buildDetailsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildTextField("Item name", _itemNameController),
+            _buildTextField("Location", _locationController),
+            _buildTextField("Details", _detailsController, maxLines: 2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              "Photo (Optional)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                  icon: const Icon(Icons.photo),
+                  label: const Text("Gallery"),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text("Camera"),
+                ),
+              ],
+            ),
+            if (_photoPath != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    Image.file(
+                      File(_photoPath!),
+                      height: 150,
+                      fit: BoxFit.cover,
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      onPressed: () {
+                        print('🧹 CLEAR PHOTO, old path = $_photoPath');
+                        setState(() => _photoPath = null);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildTextField("Email", _emailController),
+            _buildTextField("Contact Name", _contactNameController),
+            _buildTextField("Contact Method", _contactMethodController),
+            GestureDetector(
+              onTap: _pickDate,
+              child: AbsorbPointer(
+                child: TextFormField(
+                  controller: _dateController,
+                  decoration: const InputDecoration(
+                    labelText: "Date",
+                    icon: Icon(Icons.calendar_today),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        height: 70,
-                        child: Lottie.asset(
-                          'assets/animations/found.json',
-                          repeat: true,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: foundSelected ? Colors.white : Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'You found something',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: foundSelected
-                              ? Colors.white70
-                              : Colors.white54,
-                        ),
-                      ),
-                    ],
-                  ),
+                  validator: (_) => _selectedDate == null ? "Required" : null,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (_selectedType == null)
-          Text(
-            'Please select Lost or Found',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.red.shade300),
-          ),
-      ],
+      ),
     );
   }
 
-  Widget _buildPhotoPicker(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.photo_library),
-                label: const Text('Gallery'),
-                onPressed: _isSubmitting ? null : _pickFromGallery,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Camera'),
-                onPressed: _isSubmitting ? null : _pickFromCamera,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_photoPath != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 160,
-              width: double.infinity,
-              child: Image.file(File(_photoPath!), fit: BoxFit.cover),
-            ),
-          )
-        else
-          Text(
-            'No image selected',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-          ),
-      ],
+  Widget _buildSubmitButtons() {
+    return ElevatedButton(
+      onPressed: _isSubmitting ? null : _submit,
+      child: _isSubmitting
+          ? const CircularProgressIndicator()
+          : const Text("Submit"),
     );
   }
 
-  // ---------- ACTIONS ----------
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (picked != null) {
+        setState(() => _photoPath = picked.path);
+        print(
+          '📸 PICK_IMAGE: source=$source, path=$_photoPath, exists? ${File(_photoPath!).existsSync()}',
+        );
+      } else {
+        print('📸 PICK_IMAGE: user cancelled, no file selected');
+      }
+    } catch (e) {
+      print("❌ Error picking image: $e");
+    }
+  }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 1),
-      initialDate: now,
-      builder: (context, child) {
-        return Theme(data: ThemeData.dark(useMaterial3: true), child: child!);
-      },
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  Future<void> _pickFromGallery() async {
-    final XFile? picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (picked != null) {
-      setState(() {
-        _photoPath = picked.path;
-      });
-    }
-  }
-
-  Future<void> _pickFromCamera() async {
-    final XFile? picked = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-    );
-    if (picked != null) {
-      setState(() {
-        _photoPath = picked.path;
-      });
+      _selectedDate = picked;
+      _dateController.text = "${picked.day}/${picked.month}/${picked.year}";
+      print('📅 DATE PICKED: $_selectedDate');
     }
   }
 
   Future<void> _submit() async {
-    // avoid double taps
-    if (_isSubmitting) return;
+    print('🚀 SUBMIT PRESSED');
+    print('🚀 SUBMIT: selectedType = $_selectedType');
+    print('🚀 SUBMIT: photoPath = $_photoPath');
 
-    // validate all form fields
-    if (!_formKey.currentState!.validate()) return;
-
-    // enforce lost / found selection
-    if (_selectedType == null) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select Lost or Found')),
+    if (_photoPath != null) {
+      print(
+        '🚀 SUBMIT: file exists? ${File(_photoPath!).existsSync()} (path=$_photoPath)',
       );
+    }
+
+    if (!_formKey.currentState!.validate() || _selectedType == null) {
+      print('⚠️ SUBMIT: form invalid or type not selected');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please complete the form")));
       return;
     }
 
     setState(() => _isSubmitting = true);
 
-    final tempId = DateTime.now().millisecondsSinceEpoch;
-
     final item = LostItem(
-      id: tempId,
-      email: _emailController.text.trim(),
-      photoUrl: _photoPath ?? '',
-      type: _selectedType!, // "lost" or "found"
-      itemName: _itemNameController.text.trim(),
-      location: _locationController.text.trim(),
+      id: 0,
+      email: _emailController.text,
+      photoUrl: "",
+      type: _selectedType!,
+      itemName: _itemNameController.text,
+      location: _locationController.text,
       date: _selectedDate ?? DateTime.now(),
-      details: _detailsController.text.trim(),
-      contactName: _contactNameController.text.trim(),
-      contactMethod: _contactMethodController.text.trim(),
+      details: _detailsController.text,
+      contactName: _contactNameController.text,
+      contactMethod: _contactMethodController.text,
     );
 
     try {
-      final hasImage = _photoPath != null && _photoPath!.isNotEmpty;
-      print('🚀 SUBMIT: hasImage=$hasImage, path=$_photoPath');
-
       LostItem created;
-      if (hasImage) {
-        // multipart with file
+
+      if (_photoPath != null && _photoPath!.isNotEmpty) {
+        // ✅ TRUST the picker path; let MultipartFile throw if there's a real issue
+        print("📤 SUBMIT: calling createItemWithImage, path=$_photoPath");
         created = await _service.createItemWithImage(item, _photoPath!);
       } else {
-        // plain JSON (no file)
+        print("📤 SUBMIT: calling createItem (JSON only, no image)");
         created = await _service.createItem(item);
       }
 
-      print('✅ SUBMIT success, id=${created.id}, image=${created.photoUrl}');
+      print('✅ SUBMIT SUCCESS: created item id=${created.id}');
 
-      if (!mounted) return;
-      widget.onSubmit(created);
-      Navigator.pop(context);
-    } catch (e, st) {
-      // log full error to console, show friendly message in UI
-      print('❌ SUBMIT error: $e');
-      print(st);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to submit. Please try again.')),
-      );
-      setState(() => _isSubmitting = false);
+      if (mounted) {
+        widget.onSubmit(created);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print("❌ SUBMIT ERROR: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 }

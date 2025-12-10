@@ -23,21 +23,29 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   void initState() {
     super.initState();
     _item = widget.item;
+    print(
+      '🔍 ItemDetailPage.initState: id=${_item.id}, name=${_item.itemName}, '
+      'type=${_item.type}, photoUrl=${_item.photoUrl}',
+    );
   }
 
   Future<void> _editItem() async {
+    print(
+      '✏️ ItemDetailPage._editItem: navigating to EditItemPage for id=${_item.id}',
+    );
     final updated = await Navigator.push<LostItem?>(
       context,
       MaterialPageRoute(builder: (_) => EditItemPage(item: _item)),
     );
 
     if (updated != null && mounted) {
+      print('✏️ ItemDetailPage._editItem: got updated item id=${updated.id}');
       setState(() => _item = updated);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Item updated')));
-      // Also pop back to list with updated item if you want:
-      // Navigator.pop(context, updated);
+    } else {
+      print('✏️ ItemDetailPage._editItem: no updated item returned');
     }
   }
 
@@ -60,30 +68,31 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true) {
+      print('🗑 ItemDetailPage._deleteItem: user cancelled delete');
+      return;
+    }
 
     setState(() => _isDeleting = true);
+    print('🗑 ItemDetailPage._deleteItem: deleting id=${_item.id}');
 
     try {
       await _service.deleteItem(_item.id);
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Item deleted')));
-
-      // Pop back to list; ItemsPage can call _refresh()
-      Navigator.pop(context, null);
-    } catch (e) {
+      Navigator.pop(context, null); // Return to list
+    } catch (e, st) {
+      print('❌ ItemDetailPage._deleteItem error: $e');
+      print(st);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
     } finally {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-      }
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 
@@ -91,11 +100,22 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
   Widget build(BuildContext context) {
     final isLost = _item.type.toLowerCase() == 'lost';
 
+    final hasImage =
+        _item.photoUrl.isNotEmpty &&
+        !_item.photoUrl.contains('null') &&
+        !_item.photoUrl.contains('placeholder');
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_item.itemName),
         actions: [
-          IconButton(icon: const Icon(Icons.edit), onPressed: _editItem),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () {
+              print('✏️ ItemDetailPage: edit icon pressed for id=${_item.id}');
+              _editItem();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _isDeleting ? null : _deleteItem,
@@ -107,30 +127,47 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
           ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Image
+              // Image Section
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: _item.photoUrl.isNotEmpty
+                  child: hasImage
                       ? Image.network(
                           _item.photoUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.image_not_supported),
-                          ),
+                          cacheWidth: 1024,
+                          errorBuilder: (_, __, ___) {
+                            print(
+                              '⚠️ ItemDetailPage: failed to load network image: ${_item.photoUrl}',
+                            );
+                            return Container(
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: Icon(
+                                  Icons.broken_image,
+                                  size: 50,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            );
+                          },
                         )
                       : Container(
-                          color: Colors.white10,
+                          color: Colors.grey[200],
                           child: const Center(
-                            child: Icon(Icons.photo, size: 48),
+                            child: Icon(
+                              Icons.image,
+                              size: 50,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Type chip + location
+              // Status Chip + Location
               Row(
                 children: [
                   Container(
@@ -145,7 +182,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                     child: Text(
                       isLost ? 'Lost' : 'Found',
                       style: const TextStyle(
-                        color: Colors.black,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -156,12 +193,12 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                   Expanded(
                     child: Text(
                       _item.location,
-                      style: const TextStyle(color: Colors.white70),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
 
               // Title
@@ -178,25 +215,21 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               if (_item.details.isNotEmpty) ...[
                 const Text(
                   'Description',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _item.details,
-                  style: const TextStyle(color: Colors.white70),
-                ),
+                Text(_item.details),
                 const SizedBox(height: 16),
               ],
 
-              // Contact info
+              // Contact section
               const Text(
                 'Contact',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 4),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.person_outline),
+                leading: const Icon(Icons.person),
                 title: Text(_item.contactName),
                 subtitle: Text(_item.contactMethod),
               ),
@@ -206,19 +239,14 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               // Date
               const Text(
                 'Reported on',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 4),
-              Text(
-                _item.date.toLocal().toString().substring(0, 16),
-                style: const TextStyle(color: Colors.white70),
-              ),
+              Text('${_item.date.day}/${_item.date.month}/${_item.date.year}'),
             ],
           ),
-
           if (_isDeleting)
             Container(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black45,
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],

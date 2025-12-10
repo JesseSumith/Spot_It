@@ -21,14 +21,16 @@ class _EditItemPageState extends State<EditItemPage> {
   late TextEditingController _detailsController;
   late TextEditingController _contactNameController;
   late TextEditingController _contactMethodController;
-  String _type = 'Lost'; // dropdown value
-  DateTime? _selectedDate;
 
+  /// UI dropdown uses "Lost"/"Found"
+  String _type = 'Lost';
+  DateTime? _selectedDate;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+
     _itemNameController = TextEditingController(text: widget.item.itemName);
     _locationController = TextEditingController(text: widget.item.location);
     _detailsController = TextEditingController(text: widget.item.details);
@@ -38,8 +40,14 @@ class _EditItemPageState extends State<EditItemPage> {
     _contactMethodController = TextEditingController(
       text: widget.item.contactMethod,
     );
-    _type = widget.item.type; // "Lost" or "Found"
+
+    // backend model uses "lost"/"found", UI shows "Lost"/"Found"
+    _type = widget.item.type.toLowerCase() == 'lost' ? 'Lost' : 'Found';
     _selectedDate = widget.item.date;
+
+    print(
+      '✏️ EditItemPage.initState: id=${widget.item.id}, type=${widget.item.type}, name=${widget.item.itemName}',
+    );
   }
 
   @override
@@ -55,26 +63,37 @@ class _EditItemPageState extends State<EditItemPage> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final initial = _selectedDate ?? now;
+
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 1),
     );
+
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      print('📅 EditItemPage: picked date=$_selectedDate');
     }
   }
 
   Future<void> _saveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      print('⚠️ EditItemPage._saveChanges: form invalid');
+      return;
+    }
     if (_isSaving) return;
+
+    setState(() => _isSaving = true);
+
+    // Convert "Lost"/"Found" -> "lost"/"found"
+    final normalizedType = _type.toLowerCase();
 
     final updated = LostItem(
       id: widget.item.id,
       email: widget.item.email,
-      photoUrl: widget.item.photoUrl,
-      type: _type,
+      photoUrl: widget.item.photoUrl, // not changing image here
+      type: normalizedType,
       itemName: _itemNameController.text.trim(),
       location: _locationController.text.trim(),
       date: _selectedDate ?? DateTime.now(),
@@ -83,9 +102,13 @@ class _EditItemPageState extends State<EditItemPage> {
       contactMethod: _contactMethodController.text.trim(),
     );
 
-    setState(() => _isSaving = true);
+    print(
+      '✏️ EditItemPage._saveChanges: '
+      'id=${updated.id}, type=${updated.type}, name=${updated.itemName}',
+    );
 
     try {
+      // MUST match LostItemService signature
       final saved = await _service.updateItem(updated);
 
       if (!mounted) return;
@@ -94,9 +117,13 @@ class _EditItemPageState extends State<EditItemPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('Item updated')));
 
+      // send updated item back
       Navigator.pop(context, saved);
-    } catch (e) {
+    } catch (e, st) {
+      print('❌ EditItemPage update error: $e');
+      print(st);
       if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
@@ -109,8 +136,6 @@ class _EditItemPageState extends State<EditItemPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit item'),
@@ -133,7 +158,6 @@ class _EditItemPageState extends State<EditItemPage> {
           key: _formKey,
           child: Column(
             children: [
-              // Type (Lost / Found)
               DropdownButtonFormField<String>(
                 value: _type,
                 items: const [
@@ -144,38 +168,28 @@ class _EditItemPageState extends State<EditItemPage> {
                 onChanged: (value) {
                   if (value != null) {
                     setState(() => _type = value);
+                    print('✏️ EditItemPage: type changed → $_type');
                   }
                 },
               ),
               const SizedBox(height: 16),
 
-              // Item name
               TextFormField(
                 controller: _itemNameController,
                 decoration: const InputDecoration(labelText: 'Item name'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter item name';
-                  }
-                  return null;
-                },
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              // Location
               TextFormField(
                 controller: _locationController,
                 decoration: const InputDecoration(labelText: 'Location'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter location';
-                  }
-                  return null;
-                },
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              // Date
               InkWell(
                 onTap: _pickDate,
                 child: InputDecorator(
@@ -185,10 +199,7 @@ class _EditItemPageState extends State<EditItemPage> {
                     children: [
                       Text(
                         _selectedDate != null
-                            ? _selectedDate!.toLocal().toString().substring(
-                                0,
-                                10,
-                              )
+                            ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
                             : 'Select date',
                       ),
                       const Icon(Icons.calendar_today, size: 18),
@@ -198,7 +209,6 @@ class _EditItemPageState extends State<EditItemPage> {
               ),
               const SizedBox(height: 16),
 
-              // Details
               TextFormField(
                 controller: _detailsController,
                 maxLines: 3,
@@ -206,35 +216,22 @@ class _EditItemPageState extends State<EditItemPage> {
               ),
               const SizedBox(height: 16),
 
-              // Contact name
               TextFormField(
                 controller: _contactNameController,
                 decoration: const InputDecoration(labelText: 'Contact name'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Enter contact name';
-                  }
-                  return null;
-                },
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              // Contact method
               TextFormField(
                 controller: _contactMethodController,
-                decoration: const InputDecoration(
-                  labelText: 'Contact method (phone, WhatsApp, etc.)',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Enter contact method';
-                  }
-                  return null;
-                },
+                decoration: const InputDecoration(labelText: 'Contact method'),
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 24),
 
-              // Save button (in case user misses app bar icon)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

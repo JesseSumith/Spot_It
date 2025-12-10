@@ -171,7 +171,6 @@ class _ActionCard extends StatelessWidget {
     );
   }
 }
-
 // ===================== FULL-SCREEN REPORT PAGE =====================
 
 class ReportItemPage extends StatefulWidget {
@@ -185,6 +184,7 @@ class _ReportItemPageState extends State<ReportItemPage> {
   final LostItemService _service = LostItemService();
   final _formKey = GlobalKey<FormState>();
 
+  // Form controllers
   final _emailController = TextEditingController();
   final _typeController = TextEditingController();
   final _itemNameController = TextEditingController();
@@ -215,7 +215,22 @@ class _ReportItemPageState extends State<ReportItemPage> {
     setState(() => _isSubmitting = true);
 
     try {
-      await _service.createItem(item);
+      final hasImage = _photoPath != null && _photoPath!.isNotEmpty;
+      print(
+        '🚀 ReportItemPage._handleSubmit: hasImage=$hasImage, path=$_photoPath',
+      );
+
+      LostItem created;
+
+      if (hasImage) {
+        print('📤 ReportItemPage: calling createItemWithImage');
+        created = await _service.createItemWithImage(item, _photoPath!);
+      } else {
+        print('📤 ReportItemPage: calling createItem (JSON only)');
+        created = await _service.createItem(item);
+      }
+
+      print('✅ ReportItemPage: created id=${created.id}');
 
       if (!mounted) return;
 
@@ -223,8 +238,10 @@ class _ReportItemPageState extends State<ReportItemPage> {
         const SnackBar(content: Text('Item reported successfully')),
       );
 
-      Navigator.pop(context); // go back to action/items page
-    } catch (e) {
+      Navigator.pop(context); // go back to previous page
+    } catch (e, st) {
+      print('❌ ReportItemPage submit error: $e');
+      print(st);
       if (!mounted) return;
 
       ScaffoldMessenger.of(
@@ -238,22 +255,34 @@ class _ReportItemPageState extends State<ReportItemPage> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      print('⚠️ ReportItemPage._submit: form invalid');
+      return;
+    }
 
     final id = DateTime.now().millisecondsSinceEpoch;
+
+    final rawType = _typeController.text.trim().toLowerCase();
+    // Normalise type to "lost" / "found"
+    final type = (rawType == 'found') ? 'found' : 'lost';
 
     final item = LostItem(
       id: id,
       email: _emailController.text.trim(),
-      // store local path if image picked, otherwise placeholder
+      // Not sent to backend; just for UI
       photoUrl: _photoPath ?? 'https://via.placeholder.com/150',
-      type: _typeController.text.trim(),
+      type: type,
       itemName: _itemNameController.text.trim(),
       location: _locationController.text.trim(),
       date: _selectedDate ?? DateTime.now(),
       details: _detailsController.text.trim(),
       contactName: _contactNameController.text.trim(),
       contactMethod: _contactMethodController.text.trim(),
+    );
+
+    print(
+      '🧾 ReportItemPage._submit: built LostItem='
+      '{type=$type, name=${item.itemName}, location=${item.location}}',
     );
 
     _handleSubmit(item);
@@ -272,6 +301,7 @@ class _ReportItemPageState extends State<ReportItemPage> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      print('📅 ReportItemPage: picked date=$_selectedDate');
     }
   }
 
@@ -284,6 +314,9 @@ class _ReportItemPageState extends State<ReportItemPage> {
       setState(() {
         _photoPath = picked.path;
       });
+      print('📸 GALLERY picked: path=$_photoPath');
+    } else {
+      print('📸 GALLERY: user cancelled');
     }
   }
 
@@ -296,6 +329,9 @@ class _ReportItemPageState extends State<ReportItemPage> {
       setState(() {
         _photoPath = picked.path;
       });
+      print('📸 CAMERA picked: path=$_photoPath');
+    } else {
+      print('📸 CAMERA: user cancelled');
     }
   }
 
@@ -355,18 +391,38 @@ class _ReportItemPageState extends State<ReportItemPage> {
         if (_photoPath != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              height: 150,
-              width: double.infinity,
-              child: Image.file(File(_photoPath!), fit: BoxFit.cover),
+            child: Stack(
+              children: [
+                Image.file(
+                  File(_photoPath!),
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: CircleAvatar(
+                    backgroundColor: Colors.black54,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: () {
+                        print(
+                          '🧹 ReportItemPage: clear photo, old path=$_photoPath',
+                        );
+                        setState(() {
+                          _photoPath = null;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
-          )
-        else
-          Text(
-            'No image selected',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
           ),
       ],
     );
@@ -377,7 +433,7 @@ class _ReportItemPageState extends State<ReportItemPage> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Report item')),
+      appBar: AppBar(title: const Text('Report an item'), centerTitle: true),
       body: SafeArea(
         child: Stack(
           children: [
@@ -386,7 +442,7 @@ class _ReportItemPageState extends State<ReportItemPage> {
                 left: 16,
                 right: 16,
                 top: 16,
-                bottom: bottomInset + 24, // make sure button stays visible
+                bottom: bottomInset + 24,
               ),
               child: Form(
                 key: _formKey,
@@ -397,7 +453,18 @@ class _ReportItemPageState extends State<ReportItemPage> {
                     const SizedBox(height: 8),
                     _buildPhotoPicker(context),
                     const SizedBox(height: 8),
-                    _buildTextField('Type (Lost / Found)', _typeController),
+                    _buildTextField(
+                      'Type (Lost / Found)',
+                      _typeController,
+                      validator: (value) {
+                        final v = value?.trim().toLowerCase() ?? '';
+                        if (v.isEmpty) return 'Required';
+                        if (v != 'lost' && v != 'found') {
+                          return 'Please enter "Lost" or "Found"';
+                        }
+                        return null;
+                      },
+                    ),
                     _buildTextField('Item name', _itemNameController),
                     _buildTextField('Location', _locationController),
                     const SizedBox(height: 8),
@@ -411,9 +478,6 @@ class _ReportItemPageState extends State<ReportItemPage> {
                             hintText: 'dd-mm-yyyy',
                             filled: true,
                           ),
-                          validator: (_) => _selectedDate == null
-                              ? 'Please select a date'
-                              : null,
                           controller: TextEditingController(
                             text: _selectedDate == null
                                 ? ''
@@ -421,11 +485,14 @@ class _ReportItemPageState extends State<ReportItemPage> {
                                       '${_selectedDate!.month.toString().padLeft(2, '0')}-'
                                       '${_selectedDate!.year}',
                           ),
+                          validator: (_) => _selectedDate == null
+                              ? 'Please select a date'
+                              : null,
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildTextField('Details', _detailsController, maxLines: 2),
+                    _buildTextField('Details', _detailsController, maxLines: 3),
                     _buildTextField('Contact name', _contactNameController),
                     _buildTextField(
                       'Contact method (phone / email)',

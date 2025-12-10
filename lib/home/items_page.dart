@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/lost_item.dart';
 import '../service/lost_item_service.dart';
 import '../widgets/app_drawer.dart';
-import '../detail/item_detail_page.dart'; // if you still use this
+import '../detail/item_detail_page.dart';
 
 class ItemsPage extends StatefulWidget {
   const ItemsPage({super.key});
@@ -112,18 +112,25 @@ class _ItemsPageState extends State<ItemsPage> {
                   itemBuilder: (context, index) {
                     final item = filtered[index];
 
+                    final hasImage =
+                        item.photoUrl.isNotEmpty &&
+                        !item.photoUrl.contains('null') &&
+                        !item.photoUrl.contains('placeholder');
+
                     return ListTile(
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
                           width: 48,
                           height: 48,
-                          child: Image.network(
-                            item.photoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.image_not_supported),
-                          ),
+                          child: hasImage
+                              ? Image.network(
+                                  item.photoUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.image_not_supported),
+                                )
+                              : const Icon(Icons.image_not_supported),
                         ),
                       ),
                       title: Text(
@@ -139,14 +146,20 @@ class _ItemsPageState extends State<ItemsPage> {
                         ),
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        // If you still use a detail page:
-                        Navigator.push(
+                      onTap: () async {
+                        print(
+                          '📄 ItemsPage: tapped item id=${item.id}, name=${item.itemName}',
+                        );
+                        // Go to detail page
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => ItemDetailPage(item: item),
                           ),
                         );
+
+                        // After coming back (edit/delete), refresh list
+                        _refresh();
                       },
                     );
                   },

@@ -1,14 +1,17 @@
 class LostItem {
-  static const String apiBase =
-      'http://10.0.2.2:8000'; // use 10.0.2.2 for Android emulator
+  // 🔴 IMPORTANT: Change this based on your device!
+  // Android Emulator: 'http://10.0.2.2:8000'
+  // Real Phone (ADB Reverse): 'http://127.0.0.1:8000'
+  // Real Phone (Wi-Fi): 'http://192.168.1.XX:8000' (Your PC IP)
+  static const String apiBase = 'http://127.0.0.1:8000';
 
   final int id;
-  final String email; // UI only, not stored in Django
+  final String email;
   final String photoUrl;
   final String type; // "lost" or "found"
   final String itemName;
   final String location;
-  final DateTime date; // UI only, we’ll just use created_at from server
+  final DateTime date;
   final String details;
   final String contactName;
   final String contactMethod;
@@ -35,8 +38,7 @@ class LostItem {
     } else if (rawImage.startsWith('http')) {
       fullImageUrl = rawImage;
     } else {
-      fullImageUrl =
-          '$apiBase$rawImage'; // '/media/...' -> 'http://10.0.2.2:8000/media/...'
+      fullImageUrl = '$apiBase$rawImage';
     }
 
     final bool isLost = json['is_lost'] == true || json['is_lost'] == 'true';
@@ -45,8 +47,7 @@ class LostItem {
       id: json['id'] is int
           ? json['id'] as int
           : int.parse(json['id'].toString()),
-      email:
-          '', // backend has no email field, keep empty or infer from contact_method if you want
+      email: '', // Not stored in backend usually
       photoUrl: fullImageUrl,
       type: isLost ? 'lost' : 'found',
       itemName: json['title'] ?? '',
@@ -58,17 +59,15 @@ class LostItem {
     );
   }
 
-  /// What we send to Django when creating/updating.
-  /// Only include fields that the ItemPost model actually has.
+  // Data to send to Django
   Map<String, dynamic> toCreateJson() {
     return {
-      'is_lost': type == 'lost', // bool -> DRF BooleanField
+      'is_lost': type == 'lost', // boolean true/false
       'title': itemName,
       'description': details,
       'location_text': location,
       'contact_name': contactName,
       'contact_method': contactMethod,
-      // image is sent separately in multipart, not here
     };
   }
 
