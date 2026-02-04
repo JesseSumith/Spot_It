@@ -96,6 +96,28 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     }
   }
 
+  void _openFullScreenImage() {
+    final hasImage =
+        _item.photoUrl.isNotEmpty &&
+        !_item.photoUrl.contains('null') &&
+        !_item.photoUrl.contains('placeholder');
+
+    if (!hasImage) {
+      print('🖼 No valid image to show full screen');
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FullScreenImagePage(
+          imageUrl: _item.photoUrl,
+          heroTag: 'item-image-${_item.id}',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLost = _item.type.toLowerCase() == 'lost';
@@ -127,42 +149,48 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
           ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Image Section
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: hasImage
-                      ? Image.network(
-                          _item.photoUrl,
-                          fit: BoxFit.cover,
-                          cacheWidth: 1024,
-                          errorBuilder: (_, __, ___) {
-                            print(
-                              '⚠️ ItemDetailPage: failed to load network image: ${_item.photoUrl}',
-                            );
-                            return Container(
+              // Image Section (now tappable)
+              GestureDetector(
+                onTap: hasImage ? _openFullScreenImage : null,
+                child: Hero(
+                  tag: 'item-image-${_item.id}',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: hasImage
+                          ? Image.network(
+                              _item.photoUrl,
+                              fit: BoxFit.cover,
+                              cacheWidth: 1024,
+                              errorBuilder: (_, __, ___) {
+                                print(
+                                  '⚠️ ItemDetailPage: failed to load network image: ${_item.photoUrl}',
+                                );
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.broken_image,
+                                      size: 50,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
                               color: Colors.grey[200],
                               child: const Center(
                                 child: Icon(
-                                  Icons.broken_image,
+                                  Icons.image,
                                   size: 50,
                                   color: Colors.grey,
                                 ),
                               ),
-                            );
-                          },
-                        )
-                      : Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 50,
-                              color: Colors.grey,
                             ),
-                          ),
-                        ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -249,6 +277,57 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               color: Colors.black45,
               child: const Center(child: CircularProgressIndicator()),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full-screen image viewer
+class FullScreenImagePage extends StatelessWidget {
+  final String imageUrl;
+  final String heroTag;
+
+  const FullScreenImagePage({
+    super.key,
+    required this.imageUrl,
+    required this.heroTag,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: Hero(
+              tag: heroTag,
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image,
+                    color: Colors.white70,
+                    size: 80,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Close button
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ),
         ],
       ),
     );
